@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toby's Great Escape — a turkey escape game</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #2a2118;
+    font-family: Georgia, 'Times New Roman', serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---- HUD ---- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; color: #fff8e0;
+    text-shadow: 0 2px 4px rgba(0,0,0,.7); }
+  #hud.hidden { display: none; }
+  #hud-top { position: absolute; top: 14px; left: 16px; right: 16px; display: flex;
+    justify-content: space-between; align-items: flex-start; }
+  #hud-stage { font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+  #hud-score { font-size: 20px; font-weight: bold; margin-top: 4px; }
+  #hud-hearts { font-size: 26px; color: #ff6b5e; margin-top: 4px; letter-spacing: 2px; }
+  #hud-hearts.low { animation: pulse 0.7s infinite; }
+  @keyframes pulse { 50% { transform: scale(1.15); } }
+  #hud-right { text-align: right; }
+  #hud-time { font-size: 20px; font-weight: bold; }
+  #hud-distance { font-size: 16px; margin-top: 4px; }
+  #minimap { margin-top: 8px; border: 2px solid rgba(255,248,224,.85); border-radius: 8px;
+    background: rgba(20,26,16,.6); }
+  #hud-bottom { position: absolute; left: 16px; bottom: 14px; }
+  #stamina-label { font-size: 13px; letter-spacing: 1px; margin-bottom: 3px; }
+  #stamina-bar { width: 220px; height: 14px; background: rgba(0,0,0,.55); border: 2px solid #fff8e0;
+    border-radius: 8px; overflow: hidden; }
+  #hud-stamina { display: block; height: 100%; width: 100%; background: linear-gradient(90deg,#ffb03a,#ffd23e);
+    transition: width .12s linear; }
+  #hud-stamina.empty { background: #ff3b30; }
+  #hud-decoys { font-size: 16px; margin-top: 6px; }
+  #mute-btn { position: absolute; right: 16px; bottom: 14px; pointer-events: auto; cursor: pointer;
+    background: rgba(0,0,0,.55); color: #fff8e0; border: 2px solid #fff8e0; border-radius: 8px;
+    font-size: 20px; padding: 6px 12px; }
+  #banner { position: absolute; top: 22%; left: 0; right: 0; text-align: center; opacity: 0;
+    transition: opacity .4s; }
+  #banner.show { opacity: 1; }
+  .banner-title { font-size: 44px; font-weight: bold; color: #ffd23e; letter-spacing: 2px; }
+  .banner-sub { font-size: 19px; margin-top: 6px; }
+  #toast { position: absolute; bottom: 96px; left: 0; right: 0; text-align: center; font-size: 20px;
+    opacity: 0; transition: opacity .3s; }
+  #toast.show { opacity: 1; }
+  #alert { position: absolute; top: 34%; left: 0; right: 0; text-align: center; font-size: 26px;
+    font-weight: bold; color: #ff6b5e; opacity: 0; }
+  #alert.show { opacity: 1; animation: pulse .5s infinite; }
+  #flash { position: fixed; inset: 0; background: rgba(255,40,20,.35); opacity: 0; pointer-events: none; z-index: 8; }
+  #flash.show { opacity: 1; }
+
+  /* ---- Overlays ---- */
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    z-index: 10; background: rgba(20, 14, 8, .55); }
+  .overlay.show { display: flex; }
+  .panel { background: linear-gradient(160deg, #fff6dd, #f2d8a0); color: #4a2c18; border-radius: 18px;
+    border: 4px solid #8a5a30; padding: 34px 44px; max-width: 640px; text-align: center;
+    box-shadow: 0 18px 50px rgba(0,0,0,.6); }
+  .panel h1 { margin: 0 0 6px; font-size: 46px; color: #a83226; letter-spacing: 1px; }
+  .panel h2 { margin: 0 0 10px; font-size: 34px; color: #a83226; }
+  .panel p { font-size: 18px; line-height: 1.45; margin: 10px 0; }
+  .panel .story { font-style: italic; }
+  .controls { display: grid; grid-template-columns: auto auto; gap: 4px 18px; text-align: left;
+    font-size: 16px; margin: 16px auto 4px; width: fit-content; }
+  .controls b { color: #a83226; }
+  .big-btn { cursor: pointer; margin-top: 18px; font-family: inherit; font-size: 24px; font-weight: bold;
+    color: #fff8e0; background: #a83226; border: 3px solid #6b1f14; border-radius: 12px;
+    padding: 12px 34px; box-shadow: 0 5px 0 #6b1f14; }
+  .big-btn:active { transform: translateY(4px); box-shadow: none; }
+  .small-btn { cursor: pointer; margin-top: 14px; font-family: inherit; font-size: 16px;
+    color: #4a2c18; background: transparent; border: 2px solid #8a5a30; border-radius: 8px; padding: 6px 16px; }
+  #end-score { font-size: 21px; font-weight: bold; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Toby's Great Escape: steer the turkey with WASD, jump with Space, dash with Shift"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud" class="hidden">
+  <div id="hud-top">
+    <div>
+      <div id="hud-stage">Stage 1 — The Farmyard</div>
+      <div id="hud-score">SCORE 0&nbsp;&nbsp;&nbsp;BEST 0</div>
+      <div id="hud-hearts">♥♥♥</div>
+    </div>
+    <div id="hud-right">
+      <div id="hud-time">0:00</div>
+      <div id="hud-distance">80m to safety</div>
+      <canvas id="minimap" width="170" height="170"></canvas>
+    </div>
+  </div>
+  <div id="banner"></div>
+  <div id="toast"></div>
+  <div id="alert"></div>
+  <div id="hud-bottom">
+    <div id="stamina-label">STAMINA — SHIFT TO DASH</div>
+    <div id="stamina-bar"><span id="hud-stamina"></span></div>
+    <div id="hud-decoys">🪶 ×3</div>
+  </div>
+  <button id="mute-btn" title="Mute (M)">🔊</button>
+</div>
+<div id="flash"></div>
+
+<div class="overlay show" id="overlay-title">
+  <div class="panel">
+    <h1>🦃 TOBY'S GREAT ESCAPE</h1>
+    <p class="story">Thanksgiving is tomorrow, and Farmer Hank has already
+    warmed the oven. Toby the turkey has one night to run — through the
+    farmyard, the autumn forest, and the farmhouse kitchen — and out the
+    open window to freedom.</p>
+    <div class="controls">
+      <span><b>W A S D / ← ↑ ↓ →</b></span><span>run</span>
+      <span><b>SPACE</b></span><span>jump (over logs &amp; fences)</span>
+      <span><b>SHIFT</b></span><span>dash — costs stamina</span>
+      <span><b>H</b></span><span>hide in hay &amp; bushes</span>
+      <span><b>Q</b></span><span>drop a feather decoy</span>
+      <span><b>MOUSE DRAG</b></span><span>look around</span>
+      <span><b>P / M</b></span><span>pause / mute</span>
+    </div>
+    <p>Grab corn and golden feathers. Dodge the oven and the carving
+    knives. Don't let Hank, Biscuit, the foxes or Chef Mabel catch you.</p>
+    <button class="big-btn" data-action="start">▶ &nbsp;START THE ESCAPE</button>
+    <p id="title-best" style="font-size:15px"></p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-pause">
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <p>Toby is holding his breath behind a hay bale…</p>
+    <button class="big-btn" data-action="resume">▶ &nbsp;KEEP RUNNING</button><br>
+    <button class="small-btn" data-action="restart">Restart from Stage 1</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-stageclear">
+  <div class="panel">
+    <h2 id="stageclear-title">STAGE CLEAR!</h2>
+    <p id="stageclear-sub"></p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-end">
+  <div class="panel">
+    <h2 id="end-title">ESCAPED!</h2>
+    <p id="end-sub"></p>
+    <p id="end-score"></p>
+    <button class="big-btn" data-action="restart">↻ &nbsp;RUN AGAIN</button><br>
+    <button class="small-btn" data-action="mute">🔊 Sound on</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+<script>
+  // Best score on the title screen, filled in once the module boots.
+  try {
+    const best = Number.parseInt(window.localStorage.getItem('toby-great-escape-best') || '0', 10) || 0;
+    if (best > 0) document.getElementById('title-best').textContent = 'Best escape so far: ' + best + ' points';
+  } catch (e) {}
+</script>
+</body>
+</html>
