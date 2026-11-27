@@ -184,7 +184,7 @@ function buildFarmyard(rng) {
 
   // Hay bales: cover and hiding spots.
   const hayMat = lambert(loadTexture('hay.png', 2, 1));
-  const baleSpots = [[-14, 8], [16, -6], [-8, 26], [22, 18], [-24, 30], [8, -28]];
+  const baleSpots = [[-14, 8], [16, -6], [-8, 26], [22, 18], [-24, 30], [8, -28], [26, -16], [-16, -30]];
   for (const [x, z] of baleSpots) {
     const bale = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.6, 14), hayMat);
     bale.rotation.z = Math.PI / 2;
@@ -196,6 +196,67 @@ function buildFarmyard(rng) {
     circles.push({ x, z, r: 1.7, h: 3.2 });
     hidingSpots.push({ x, z, r: 2.6 });
   }
+
+  // Crates stacked by the barn and barrels by the west wall: solid cover
+  // the autopilot can route around (all off the central dirt path).
+  const crateMat = lambert(loadTexture('crate.png', 1, 1));
+  const crateSpots = [[-14, -10, 0], [-12.4, -9, 0.7], [-13.2, -10.2, 1.8], [30, 24, 0.3], [31.6, 23, 1.2]];
+  for (const [x, z, y] of crateSpots) {
+    const crate = box(1.8, 1.8, 1.8, crateMat, x, 0.9 + y, z);
+    crate.rotation.y = rng.range(0, Math.PI / 2);
+    group.add(crate);
+    if (y < 0.1) colliders.push({ x, z, hx: 1.1, hz: 1.1, h: 1.8 });
+  }
+  const barrelMat = lambert(loadTexture('barrel.png', 1, 1));
+  const barrelSpots = [[-38, -6], [-36, -2], [-40, -12], [34, 20], [36, 24]];
+  for (const [x, z] of barrelSpots) {
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 2.1, 14), barrelMat);
+    barrel.position.set(x, 1.05, z);
+    barrel.castShadow = true;
+    barrel.receiveShadow = true;
+    group.add(barrel);
+    circles.push({ x, z, r: 1.0, h: 2.1 });
+  }
+
+  // Flower meadow patches along the path edges, and a haystack by the barn.
+  const flowerMat = lambert(loadTexture('flowers.png', 2, 2), { side: THREE.DoubleSide });
+  for (const [x, z, w] of [[7, 20, 7], [-11, -14, 6], [15, 30, 8], [-21, 14, 6], [10, -34, 7]]) {
+    const patch = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.7), flowerMat);
+    patch.rotation.x = -Math.PI / 2;
+    patch.rotation.z = rng.range(0, Math.PI);
+    patch.position.set(x, 0.03, z);
+    patch.receiveShadow = true;
+    group.add(patch);
+  }
+  const thatchMat = lambert(loadTexture('thatch.png', 2, 1));
+  const haystack = new THREE.Mesh(new THREE.ConeGeometry(3.4, 5.2, 12), thatchMat);
+  haystack.position.set(-24, 2.6, -32);
+  haystack.castShadow = true;
+  group.add(haystack);
+  circles.push({ x: -24, z: -32, r: 3.2, h: 5.2 });
+  hidingSpots.push({ x: -24, z: -32, r: 4.2 });
+
+  // The scarecrow by the cornfield: pole, crossbar, straw head, floppy hat.
+  const scare = new THREE.Group();
+  const poleMat = flat(0x6b4a2a);
+  scare.add(box(0.3, 4.4, 0.3, poleMat, 0, 2.2, 0));
+  scare.add(box(2.6, 0.3, 0.3, poleMat, 0, 3.4, 0));
+  const strawMat = lambert(loadTexture('thatch.png', 1, 1));
+  const scareHead = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), strawMat);
+  scareHead.position.set(0, 4.2, 0);
+  scareHead.castShadow = true;
+  scare.add(scareHead);
+  const hatTop = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.7, 10), flat(0x8a5a30));
+  hatTop.position.set(0, 4.8, 0);
+  scare.add(hatTop);
+  const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.08, 12), flat(0x8a5a30));
+  hatBrim.position.set(0, 4.5, 0);
+  scare.add(hatBrim);
+  const shirt = box(1.6, 1.4, 0.4, lambert(loadTexture('barnwood.png', 1, 1)), 0, 3.0, 0);
+  scare.add(shirt);
+  scare.position.set(-38, 0, 12);
+  group.add(scare);
+  circles.push({ x: -38, z: 12, r: 0.7, h: 4.4 });
 
   // Pumpkins by the barn, a corn wall on the west edge, trees on the rest.
   const pumpkinMat = lambert(loadTexture('pumpkin.png', 2, 2));
@@ -214,8 +275,14 @@ function buildFarmyard(rng) {
   group.add(cornWall);
 
   const barkMat = lambert(loadTexture('bark.png', 1, 2));
-  const leafMats = [lambert(loadTexture('leaves.png', 2, 2)), flat(0xb8641e), flat(0xc98a2a)];
-  const treeCircles = scatterTrees(group, rng, half, 26, barkMat, leafMats,
+  // All three canopy mats use the leaf pattern with warm tints: flat-colour
+  // blobs read as plain yellow balloons, the patterned map reads as foliage.
+  const leafMats = [
+    lambert(loadTexture('leaves.png', 2, 2)),
+    lambert(loadTexture('leaves.png', 2, 2), { color: 0xffc890 }),
+    lambert(loadTexture('leaves.png', 2, 2), { color: 0xffe0b0 }),
+  ];
+  const treeCircles = scatterTrees(group, rng, half, 34, barkMat, leafMats,
     [{ x: 0, z: 0, r: 14 }, { x: -30, z: -18, r: 14 }, { x: 0, z: -44, r: 8 }]);
   circles.push(...treeCircles);
 
@@ -289,14 +356,18 @@ function buildForest(rng) {
 
   // Dense autumn trees everywhere except the path and the stream bridge.
   const barkMat = lambert(loadTexture('bark.png', 1, 2));
-  const leafMats = [lambert(loadTexture('leaves.png', 2, 2)), flat(0xa84a16), flat(0xd08a24)];
-  const treeCircles = scatterTrees(group, rng, half, 64, barkMat, leafMats,
+  const leafMats = [
+    lambert(loadTexture('leaves.png', 2, 2)),
+    lambert(loadTexture('leaves.png', 2, 2), { color: 0xffc890 }),
+    lambert(loadTexture('leaves.png', 2, 2), { color: 0xffe0b0 }),
+  ];
+  const treeCircles = scatterTrees(group, rng, half, 88, barkMat, leafMats,
     [{ x: 0, z: 0, r: 10 }, { x: 0, z: -48, r: 9 }, { x: 0, z: 4, r: 8 }]);
   circles.push(...treeCircles);
 
   // Bushes to hide in, fallen logs to jump over, mushrooms for charm.
   const bushMat = lambert(loadTexture('leaves.png', 1, 1));
-  for (let i = 0; i < 14; i += 1) {
+  for (let i = 0; i < 22; i += 1) {
     const x = rng.range(-half + 8, half - 8);
     const z = rng.range(-half + 8, half - 8);
     if (Math.abs(x) < 5 || Math.abs(z - 4) < 6) continue;
@@ -307,7 +378,7 @@ function buildForest(rng) {
     circles.push({ x, z, r: 1.2, h: 1.6 });
   }
   const logMat = lambert(loadTexture('bark.png', 2, 1));
-  for (let i = 0; i < 8; i += 1) {
+  for (let i = 0; i < 10; i += 1) {
     const x = rng.range(-half + 10, half - 10);
     const z = rng.range(-half + 10, half - 10);
     if (Math.abs(x) < 6) continue;
@@ -321,7 +392,7 @@ function buildForest(rng) {
   }
   const capMat = flat(0xc23a2e);
   const stemMat = flat(0xf2ead8);
-  for (let i = 0; i < 16; i += 1) {
+  for (let i = 0; i < 26; i += 1) {
     const m = new THREE.Group();
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.5, 8), stemMat);
     stem.position.y = 0.25;
@@ -330,6 +401,23 @@ function buildForest(rng) {
     m.add(stem, cap);
     m.position.set(rng.range(-half + 6, half - 6), 0, rng.range(-half + 6, half - 6));
     group.add(m);
+  }
+  // Fern clusters: three crossed green blades each, no collider, pure cover.
+  const fernMat = lambert(loadTexture('forestfloor.png', 1, 1));
+  for (let i = 0; i < 20; i += 1) {
+    const x = rng.range(-half + 8, half - 8);
+    const z = rng.range(-half + 8, half - 8);
+    if (Math.abs(x) < 5 || Math.abs(z - 4) < 6) continue;
+    const fern = new THREE.Group();
+    for (let b = 0; b < 3; b += 1) {
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.4, 6), fernMat);
+      blade.position.set(rng.range(-0.3, 0.3), 0.6, rng.range(-0.3, 0.3));
+      blade.rotation.z = rng.range(-0.4, 0.4);
+      blade.castShadow = true;
+      fern.add(blade);
+    }
+    fern.position.set(x, 0, z);
+    group.add(fern);
   }
 
   // The old oak hollow: the exit, marked by a warm glow.
@@ -418,9 +506,9 @@ function buildKitchen(rng) {
   rug.receiveShadow = true;
   group.add(rug);
 
-  // Walls: brick below, warm plaster above.
+  // Walls: brick below, warm patterned wallpaper above.
   const brickMat = lambert(loadTexture('brick.png', 6, 2));
-  const plasterMat = lambert(loadTexture('plaster.png', 4, 2));
+  const plasterMat = lambert(loadTexture('wallpaper.png', 6, 2));
   function wall(w, h, x, y, z, ry) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), brickMat);
     m.position.set(x, y, z);
@@ -463,10 +551,29 @@ function buildKitchen(rng) {
   colliders.push({ x: -6, z: -roomD / 2 + 2.5, hx: 2.8, hz: 1.8, h: 4.4 });
   const ovenZone = { x: -6, z: -roomD / 2 + 6.5, r: 5.5 };
 
+  // Warm oven glow spilling across the floor: a soft additive radial pool
+  // of light in front of the oven door.
+  const glowCanvas = document.createElement('canvas');
+  glowCanvas.width = 256;
+  glowCanvas.height = 256;
+  const glowCtx = glowCanvas.getContext('2d');
+  const grad = glowCtx.createRadialGradient(128, 128, 8, 128, 128, 128);
+  grad.addColorStop(0, 'rgba(255, 122, 20, 0.55)');
+  grad.addColorStop(0.55, 'rgba(255, 110, 10, 0.22)');
+  grad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+  glowCtx.fillStyle = grad;
+  glowCtx.fillRect(0, 0, 256, 256);
+  const glowTex = new THREE.CanvasTexture(glowCanvas);
+  const ovenGlow = new THREE.Mesh(new THREE.PlaneGeometry(13, 9),
+    new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  ovenGlow.rotation.x = -Math.PI / 2;
+  ovenGlow.position.set(-6, 0.06, -roomD / 2 + 8);
+  group.add(ovenGlow);
+
   // The big table with the gingham cloth — and the carving board on it.
   const clothMat = lambert(loadTexture('tablecloth.png', 3, 2));
   const table = new THREE.Group();
-  table.add(box(10, 0.35, 5, flat(0x6b4a2a), 0, 2.4, 0));
+  table.add(box(10, 0.35, 5, clothMat, 0, 2.4, 0));
   const cloth = box(10.6, 1.1, 5.6, clothMat, 0, 2.0, 0);
   table.add(cloth);
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
@@ -474,28 +581,118 @@ function buildKitchen(rng) {
   }
   const board = box(2.2, 0.12, 1.4, flat(0xc9a06a), -2, 2.65, 0);
   table.add(board);
+  const loaf = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), flat(0xc98d4a));
+  loaf.scale.set(1.5, 0.55, 0.9);
+  loaf.position.set(-2, 2.85, 0);
+  loaf.castShadow = true;
+  table.add(loaf);
   const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.55, 0.8, 12),
     standard(null, { color: 0x3a3f46, metalness: 0.7, roughness: 0.35 }));
   pot.position.set(2.5, 2.95, -0.8);
   pot.castShadow = true;
   table.add(pot);
+  // Fruit bowl: a wide bowl with apples and an orange.
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.5, 0.4, 14),
+    standard(null, { color: 0x7a4a2e, metalness: 0.2, roughness: 0.5 }));
+  bowl.position.set(3.2, 2.75, 1.2);
+  bowl.castShadow = true;
+  table.add(bowl);
+  const fruitCols = [0xc23a2e, 0xd84a20, 0x8a2a20, 0xe8821e];
+  fruitCols.forEach((c, i) => {
+    const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), flat(c));
+    fruit.position.set(3.2 + (i % 2 ? 0.3 : -0.3), 3.0, 1.2 + (i < 2 ? -0.25 : 0.25));
+    fruit.castShadow = true;
+    table.add(fruit);
+  });
+  // Teapot: squat body, spout and handle.
+  const teapot = new THREE.Group();
+  const tpBody = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10),
+    standard(null, { color: 0x4a6a8a, metalness: 0.3, roughness: 0.4 }));
+  tpBody.scale.y = 0.85;
+  teapot.add(tpBody);
+  const spout = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.8, 8),
+    standard(null, { color: 0x4a6a8a, metalness: 0.3, roughness: 0.4 }));
+  spout.rotation.z = -1.1;
+  spout.position.set(0.6, 0.1, 0);
+  teapot.add(spout);
+  teapot.position.set(0.4, 2.95, 1.4);
+  teapot.traverse((o) => { o.castShadow = true; });
+  table.add(teapot);
   table.position.set(-6, 0, 2);
   group.add(table);
   colliders.push({ x: -6, z: 2, hx: 5.3, hz: 2.8, h: 2.6 });
   hidingSpots.push({ x: -6, z: 2, r: 6.4 });
 
-  // Counters along the south wall and the pantry shelves.
+  // Warm light hanging over the table, so the kitchen reads warm, not dim.
+  const tableLight = new THREE.PointLight(0xffd9a0, 26, 18, 1.6);
+  tableLight.position.set(-6, 6, 2);
+  group.add(tableLight);
+
+  // Counters along the south wall, each topped with pots and pans.
   const counterMat = lambert(loadTexture('wood.png', 4, 1));
   for (const x of [-18, -10, 10, 18]) {
     const counter = box(7, 2.6, 2.4, counterMat, x, 1.3, roomD / 2 - 2);
     group.add(counter);
     colliders.push({ x, z: roomD / 2 - 2, hx: 3.5, hz: 1.2, h: 2.6 });
+    const cPot = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 0.7, 12),
+      standard(null, { color: 0x3a3f46, metalness: 0.7, roughness: 0.35 }));
+    cPot.position.set(x - 1.2, 2.95, roomD / 2 - 2);
+    cPot.castShadow = true;
+    group.add(cPot);
+    const pan = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.12, 12),
+      standard(null, { color: 0x2a2d33, metalness: 0.8, roughness: 0.3 }));
+    pan.position.set(x + 1.4, 2.66, roomD / 2 - 2);
+    pan.castShadow = true;
+    group.add(pan);
+    const panHandle = box(1.0, 0.08, 0.16, flat(0x2a2018), x + 2.4, 2.66, roomD / 2 - 2);
+    group.add(panHandle);
   }
   const pantryMat = lambert(loadTexture('pantry.png', 3, 2));
   const pantry = box(8, 7, 1.2, pantryMat, -roomW / 2 + 1, 3.5, -12);
   pantry.rotation.y = Math.PI / 2;
   group.add(pantry);
   colliders.push({ x: -roomW / 2 + 1, z: -12, hx: 1.2, hz: 4, h: 7 });
+
+  // Wall shelves on the east wall, jars lined up, and a rail of hanging
+  // utensils (ladle, spatula, tongs) swaying gently in the oven's heat.
+  const shelfMat = lambert(loadTexture('wood.png', 3, 1));
+  const jarCols = [0xb87848, 0x786a50, 0xc8a05a, 0x6e8258, 0xbc6e50];
+  for (const [sy, sz] of [[4.6, -6], [4.6, 6], [6.4, 0]]) {
+    const shelf = box(0.9, 0.18, 7, shelfMat, roomW / 2 - 0.8, sy, sz);
+    group.add(shelf);
+    for (let i = 0; i < 4; i += 1) {
+      const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.85, 10),
+        standard(null, { color: jarCols[(i + (sz > 0 ? 2 : 0)) % jarCols.length], roughness: 0.6 }));
+      jar.position.set(roomW / 2 - 0.8, sy + 0.5, sz - 2.4 + i * 1.6);
+      jar.castShadow = true;
+      group.add(jar);
+    }
+  }
+  const rail = box(0.12, 0.12, 6, standard(null, { color: 0x3a3f46, metalness: 0.7, roughness: 0.4 }),
+    roomW / 2 - 0.6, 5.4, -14);
+  group.add(rail);
+  const utensils = [];
+  for (let i = 0; i < 3; i += 1) {
+    const u = new THREE.Group();
+    const stick = box(0.1, 1.4, 0.1, flat(0x8a6a42), 0, -0.7, 0);
+    u.add(stick);
+    if (i === 0) {
+      const bowlU = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+        standard(null, { color: 0x9aa0a8, metalness: 0.8, roughness: 0.3 }));
+      bowlU.rotation.x = Math.PI;
+      bowlU.position.y = -1.5;
+      u.add(bowlU);
+    } else if (i === 1) {
+      const flatU = box(0.5, 0.7, 0.08, flat(0xc9a06a), 0, -1.7, 0);
+      u.add(flatU);
+    } else {
+      const tong = box(0.34, 0.9, 0.08, standard(null, { color: 0x9aa0a8, metalness: 0.8, roughness: 0.3 }), 0, -1.8, 0);
+      u.add(tong);
+    }
+    u.position.set(roomW / 2 - 0.6, 5.4, -16 + i * 2);
+    group.add(u);
+    utensils.push(u);
+  }
 
   // The open window on the north wall, off to one side: the way out, with
   // evening light. The cook guards this corner, and a butcher block stands
@@ -604,6 +801,11 @@ function buildKitchen(rng) {
       }
       doorMat.emissiveIntensity = 1.4 + Math.sin(t * 3) * 0.5;
       ovenLight.intensity = 55 + Math.sin(t * 3) * 12;
+      // Hanging utensils sway gently in the oven's rising heat.
+      for (let i = 0; i < utensils.length; i += 1) {
+        utensils[i].rotation.x = Math.sin(t * 1.4 + i * 1.7) * 0.06;
+      }
+      tableLight.intensity = 25 + Math.sin(t * 2.2) * 1.5;
     },
   };
 }

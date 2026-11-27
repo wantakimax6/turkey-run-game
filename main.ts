@@ -79,6 +79,20 @@ cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
 
+// The platform caps the whole of /output at 64 MiB / 1,000 entries, shared
+// by game/, screenshots/ and dossier.json — check the total after the copy,
+// before the dossier is written, so an over-budget build fails here.
+const OUT_MAX_BYTES = 64 * 1024 * 1024;
+const OUT_MAX_ENTRIES = 1000;
+const outFiles = walk(out);
+const outBytes = outFiles.reduce((sum, f) => sum + statSync(f).size, 0);
+if (outFiles.length > OUT_MAX_ENTRIES) {
+  throw new Error(`/output holds ${outFiles.length} files, over the ${OUT_MAX_ENTRIES} cap`);
+}
+if (outBytes > OUT_MAX_BYTES) {
+  throw new Error(`/output is ${outBytes} bytes, over the ${OUT_MAX_BYTES} cap`);
+}
+
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the
 // bytes; the others refuse an entry the scorer would refuse (more than 4
 // screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of
@@ -112,5 +126,6 @@ if (outShots.length !== shots.length) {
 console.log(
   `Toby's Great Escape handed in: game/ ${game.files} files, `
   + `${(game.bytes / 1048576).toFixed(2)} MiB; screenshots: ${shots.join(', ')}; `
-  + `dossier.json ${(dossierBytes / 1024).toFixed(1)} KiB`,
+  + `dossier.json ${(dossierBytes / 1024).toFixed(1)} KiB; `
+  + `/output total ${(outBytes / 1048576).toFixed(2)} MiB in ${outFiles.length} files`,
 );

@@ -49,6 +49,13 @@ sun.shadow.camera.far = 220;
 sun.shadow.bias = -0.0006;
 scene.add(sun);
 scene.add(sun.target);
+// Warm fill from the opposite side, no shadows: it lifts the backs of
+// characters and trees the sun never reaches, so Toby reads as a turkey
+// from the behind-camera view instead of a dark silhouette.
+const fill = new THREE.DirectionalLight(0xffe0c0, 0.55);
+fill.position.set(-40, 30, -50);
+scene.add(fill);
+scene.add(fill.target);
 
 const audio = createAudio();
 const hud = createHud();
@@ -155,9 +162,11 @@ function loadStage(index, salt = 0) {
   scene.background = new THREE.Color(def.sky);
   scene.fog = new THREE.Fog(def.fog, 55, 170);
   const kitchen = def.id === 'kitchen';
-  sun.intensity = kitchen ? 0.5 : 2.4;
+  sun.intensity = kitchen ? 0.7 : 2.4;
   sun.position.set(kitchen ? -20 : 45, kitchen ? 30 : 70, kitchen ? -10 : 25);
-  hemi.intensity = kitchen ? 0.45 : 0.9;
+  hemi.intensity = kitchen ? 0.55 : 0.9;
+  fill.intensity = kitchen ? 0.25 : 0.55;
+  audio.setStage(def.id);
   for (const cloud of clouds) cloud.visible = !kitchen;
   game.chasers = game.stage.chaserSpawns.map((s) => {
     const c = createChaser(s.kind, s.x, s.z, game.rng);
@@ -615,7 +624,14 @@ if (shot) {
     renderer.render(scene, camera);
     painted += 1;
     if (painted < 3) requestAnimationFrame(paint);
-    else window.__shotReady = true;
+    else {
+      window.__shotReady = true;
+      // Keep re-rendering on a timer after staging: texture images decode
+      // asynchronously, and a still frame never re-uploads a texture that
+      // finished decoding after the last paint — without this the
+      // screenshot can catch every PNG surface black.
+      setInterval(() => renderer.render(scene, camera), 250);
+    }
   }
   requestAnimationFrame(paint);
 } else if (testMode === 'autoplay') {

@@ -127,10 +127,10 @@ async function main() {
       const out = process.argv[4];
       await cdp.send('Page.navigate', { url: `${BASE}/index.html?shot=${name}&seed=1` });
       await waitFor(cdp, 'window.__shotReady === true', 120000, '__shotReady');
-      // Textures load asynchronously; give the big 2048 px PNGs time to
-      // arrive and upload before the screenshot, or textured surfaces
-      // render black.
-      await sleep(2500);
+      // Textures load asynchronously; give the big 4096 px PNGs time to
+      // arrive, decode and upload before the screenshot, or textured
+      // surfaces render black. (A 9 MiB 4096 px leaf map decodes to 67 MB.)
+      await sleep(15000);
       await screenshot(cdp, out);
     } else if (mode === 'autoplay') {
       const seed = process.argv[3] || '1';

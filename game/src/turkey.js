@@ -7,7 +7,9 @@ import { flat, loadTexture, standard } from './textures.js';
 
 export function buildToby() {
   const group = new THREE.Group();
-  const brown = standard(loadTexture('feather.png'), { roughness: 0.95 });
+  // Bright scalloped body feathers: the old dark feather map made Toby's
+  // back read as a black blob from the behind-camera view.
+  const brown = standard(loadTexture('bodyfeather.png'), { roughness: 0.95 });
   const darkBrown = flat(0x5a3a22);
   const cream = flat(0xf2e3c2);
   const orange = flat(0xe8821e);
@@ -61,33 +63,62 @@ export function buildToby() {
     eyes.push(pupil);
   }
 
-  // Tail fan: seven feather plumes fanning out behind.
+  // Cream rump patch: breaks up the dark rear so the body reads as
+  // feathered from the behind-camera view.
+  const rump = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), cream);
+  rump.scale.set(1, 0.75, 0.5);
+  rump.position.set(0, 1.0, -0.72);
+  group.add(rump);
+
+  // Tail fan: nine bold banded plumes fanning wider than the body, plus a
+  // second inner row of five shorter plumes for depth. The fan uses the
+  // bright tailfeather map (cream/bronze bands with an eye-spot) and leans
+  // back only slightly, so it faces the camera that follows behind Toby.
   const tail = new THREE.Group();
-  tail.position.set(0, 1.25, -0.85);
-  const featherMat = standard(loadTexture('feather.png'), { side: THREE.DoubleSide, roughness: 0.9 });
+  tail.position.set(0, 1.35, -0.9);
+  const featherMat = standard(loadTexture('tailfeather.png'), { side: THREE.DoubleSide, roughness: 0.9 });
   const plumes = [];
-  for (let i = 0; i < 7; i += 1) {
-    const angle = (i - 3) * 0.32;
-    const plume = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 1.15), featherMat);
-    plume.position.set(Math.sin(angle) * 0.55, Math.cos(angle) * 0.55, 0);
+  for (let i = 0; i < 9; i += 1) {
+    const angle = (i - 4) * 0.28;
+    const plume = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.5), featherMat);
+    plume.position.set(Math.sin(angle) * 0.8, Math.cos(angle) * 0.72, 0);
     plume.rotation.z = -angle;
-    plume.rotation.x = -0.35;
+    plume.rotation.x = -0.15;
+    plume.castShadow = true;
+    tail.add(plume);
+    plumes.push(plume);
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const angle = (i - 2) * 0.3;
+    const plume = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.95), featherMat);
+    plume.position.set(Math.sin(angle) * 0.45, Math.cos(angle) * 0.45, 0.12);
+    plume.rotation.z = -angle;
+    plume.rotation.x = -0.1;
     plume.castShadow = true;
     tail.add(plume);
     plumes.push(plume);
   }
   group.add(tail);
 
-  // Wings: flat feathered flaps on the sides.
+  // Wings: broad feathered flaps angled outward so their shape reads from
+  // behind, with three banded feather tips fanning off each rear edge.
   const wings = [];
   for (const side of [-1, 1]) {
     const wing = new THREE.Group();
-    wing.position.set(side * 0.78, 1.25, 0.1);
+    wing.position.set(side * 0.85, 1.3, 0.05);
     const flap = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), brown);
-    flap.scale.set(0.28, 0.9, 1.25);
-    flap.position.set(side * 0.1, -0.15, 0);
+    flap.scale.set(0.34, 1.0, 1.45);
+    flap.position.set(side * 0.12, -0.15, 0);
     flap.castShadow = true;
     wing.add(flap);
+    for (let i = 0; i < 3; i += 1) {
+      const tip = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.7), featherMat);
+      tip.position.set(side * (0.1 + i * 0.08), -0.55 - i * 0.06, -0.55 - i * 0.14);
+      tip.rotation.set(-0.5, side * 0.35, side * (0.25 + i * 0.22));
+      tip.castShadow = true;
+      wing.add(tip);
+    }
+    wing.rotation.z = side * -0.18;
     group.add(wing);
     wings.push(wing);
   }
